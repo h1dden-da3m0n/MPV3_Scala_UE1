@@ -29,7 +29,7 @@ object AdvancedFutureConcepts extends App {
 
   val nValues = 64
   val rngNumbers = Seq.fill(nValues)(Random.nextInt(nValues * 2))
-  rngNumbers.foreach(x => print(s"$x "))
+  println(rngNumbers.mkString("[", ", ", "]"))
   println()
 
   val f1 = parallelMax1(rngNumbers, 4)
