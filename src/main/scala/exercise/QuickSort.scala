@@ -4,7 +4,6 @@ import java.util.concurrent.Executors
 
 import basics.Futures.println
 
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Random
@@ -31,7 +30,7 @@ object QuickSort extends App {
   }
 
   // TODO: Was 1.2 b)
-  def quickSortPar[T](seq: Seq[T], threshold: Int = -1)(implicit ord: Ordering[T]): Future[Seq[T]] = {
+  def quickSortPar[T](seq: Seq[T], threshold: Int = -1)(implicit ord: Ordering[T], ctx: ExecutionContext): Future[Seq[T]] = {
     if (seq.length <= 1) Future {
       seq
     }
@@ -64,7 +63,7 @@ object QuickSort extends App {
     println(s"Avg. Elapsed time over $reps run(s): ${runtime.sum / runtime.size} ns")
   }
 
-  def performanceTestFuture[T](func: => Future[T], reps: Int = 100)(implicit ctx: ExecutionContext): Unit = {
+  def performanceTestFuture[T](func: => Future[T], reps: Int = 100): Unit = {
     Await.ready(func, Duration.Inf)
 
     val runtime = for (i <- 0 to reps) yield {
@@ -84,11 +83,14 @@ object QuickSort extends App {
   val rngNumbers = Seq.fill(nValues)(IntBox(Random.nextInt(32)))
   val sortedRng = quickSort(rngNumbers)
   val reverseSortRng = quickSort(rngNumbers)(IntBox.ascendingOrdering)
-  println(rngNumbers)
-  println(sortedRng)
-  println(reverseSortRng)
+  println(rngNumbers.mkString("[", ", ", "]"))
+  println(sortedRng.mkString("[", ", ", "]"))
+  println(reverseSortRng.mkString("[", ", ", "]"))
 
   println("---- 1.2 b) ----")
+
+  import scala.concurrent.ExecutionContext.Implicits.global
+
   val nValues2 = 20480
   val rngNumbers2 = Seq.fill(nValues2)(IntBox(Random.nextInt(nValues2)))
 
@@ -105,12 +107,12 @@ object QuickSort extends App {
   }
 
   print('\n')
-  println("QuickSortPar 100x with ExecutionContext")
+  print(f"QuickSortPar 100x with ExecutionContext\n")
   performanceTestFuture(quickSortPar(rngNumbers2, nValues2 / 2), 4)
   print(f"CachedThreadPool > \n")
-  performanceTestFuture(quickSortPar(rngNumbers2, nValues2 / 2), 4)(ExecutionContext.fromExecutor(Executors.newCachedThreadPool()))
+  performanceTestFuture(quickSortPar(rngNumbers2, nValues2 / 2)(IntBox.descendingOrdering, ExecutionContext.fromExecutor(Executors.newCachedThreadPool())), 4)
   print(f"FixedThreadPool(32) > \n")
-  performanceTestFuture(quickSortPar(rngNumbers2, nValues2 / 2), 4)(ExecutionContext.fromExecutor(Executors.newFixedThreadPool(8)))
+  performanceTestFuture(quickSortPar(rngNumbers2, nValues2 / 2)(IntBox.descendingOrdering, ExecutionContext.fromExecutor(Executors.newFixedThreadPool(8))), 4)
   print(f"ScheduledThreadPool(4) > \n")
-  performanceTestFuture(quickSortPar(rngNumbers2, nValues2 / 2), 4)(ExecutionContext.fromExecutor(Executors.newScheduledThreadPool(4)))
+  performanceTestFuture(quickSortPar(rngNumbers2, nValues2 / 2)(IntBox.descendingOrdering, ExecutionContext.fromExecutor(Executors.newScheduledThreadPool(4))), 4)
 }
