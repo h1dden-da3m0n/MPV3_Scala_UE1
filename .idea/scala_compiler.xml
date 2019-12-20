@@ -3,6 +3,7 @@
   <component name="ScalaCompilerConfiguration">
     <profile name="sbt 1" modules="scala_ue01" />
     <profile name="sbt 2" modules="Scala_UE01">
+      <option name="postfixOps" value="true" />
       <option name="deprecationWarnings" value="true" />
     </profile>
   </component>

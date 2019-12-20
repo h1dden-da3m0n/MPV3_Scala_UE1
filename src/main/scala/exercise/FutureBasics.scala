@@ -33,19 +33,18 @@ object FutureBasics extends App {
 
   println("==== FutureBasics ====")
   println("---- 1.1 a) ----")
-  val fSuccess = doInParallel(doWork(1, 5), doWork(2, 5))
-  fSuccess onComplete {
-    case Success(_) => println("✔ doInParallel finished Successful")
-    case Failure(ex) => println(s"❌ doInParallel finished with exception: $ex")
+
+  def printCompleted[T](future: Future[T]): Unit = {
+    future onComplete {
+      case Success(_) => println("✔ doInParallel finished Successful")
+      case Failure(ex) => println(s"❌ doInParallel finished with exception: $ex")
+    }
+    Await.ready(future, Duration.Inf)
+    Thread.sleep(50)
   }
-  val fFailure = doInParallel(doWork(1, 6), doWork(2, 5))
-  fFailure onComplete {
-    case Success(_) => println("✔ doInParallel finished Successful")
-    case Failure(ex) => println(s"❌ doInParallel finished with exception: $ex")
-  }
-  Await.ready(fSuccess, Duration.Inf)
-  Await.ready(fFailure, Duration.Inf)
-  Thread.sleep(50)
+
+  printCompleted(doInParallel(doWork(1, 5), doWork(2, 5)))
+  printCompleted(doInParallel(doWork(1, 6), doWork(2, 5)))
 
   println("---- 1.1 b) ----")
   val fReturn = doInParallel(Future(compute(1, 3, 32)), Future(compute(2, 5, 10)))
@@ -61,9 +60,9 @@ object FutureBasics extends App {
   val n = 8
   val n2 = n / 2
   val rngNumbers = Seq.fill(n)(Random.nextInt(16))
-  println(s"rngNumbers = $rngNumbers")
+  println(s"rngNumbers = ${rngNumbers.mkString("[", ", ", "]")}")
   val splitRngNums = rngNumbers.splitAt(n2)
-  println(s"splitRngNums = $splitRngNums")
+  println(s"splitRngNums = [${splitRngNums._1.mkString("[", ", ", "]")}, ${splitRngNums._2.mkString("[", ", ", "]")}]")
   val fMax = doInParallel(
     Future(compute(1, n2, splitRngNums._1.max)),
     Future(compute(2, n2, splitRngNums._2.max))
