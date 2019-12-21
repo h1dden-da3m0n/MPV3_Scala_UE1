@@ -7,12 +7,16 @@ import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 import scala.util.{Failure, Random, Success}
 
 object AdvancedFutureConcepts extends App {
-  def parallelMax1(intList: Seq[Int], segmentCnt: Int)(implicit ec: ExecutionContext): Future[Int] = {
-    val segmentSize = Future {
-      if (intList.isEmpty) throw new IllegalArgumentException("ERROR: intList must not be empty")
+  private def trySegmentCalc(listSize: Int, segmentCnt: Int)(implicit ec: ExecutionContext): Future[Int] = {
+    Future {
+      if (listSize == 0) throw new IllegalArgumentException("ERROR: intList must not be empty")
       if (segmentCnt <= 0) throw new IllegalArgumentException("ERROR: segmentCnt must not be 0 or below")
-      intList.size / segmentCnt
+      listSize / segmentCnt
     }
+  }
+
+  def parallelMax1(intList: Seq[Int], segmentCnt: Int)(implicit ec: ExecutionContext): Future[Int] = {
+    val segmentSize = trySegmentCalc(intList.size, segmentCnt)
     val segments = segmentSize map { s => intList.grouped(s).toList }
 
     val futureMaxLists = segments map {
@@ -27,31 +31,40 @@ object AdvancedFutureConcepts extends App {
     maxLists map { list => list.max }
   }
 
-  //  private def futureSequence[T, TO](in: List[Future[T]])(implicit ec: ExecutionContext): Future[TO] = {
-  //    Future {
-  //      TO
-  //    }
-  //  }
-  //
-  //  def parallelMax2(intList: Seq[Int], segmentCnt: Int)(implicit ec: ExecutionContext): Future[Int] = {
-  //    val segmentSize = Future {
-  //      if (intList.isEmpty) throw new IllegalArgumentException("ERROR: intList must not be empty")
-  //      if (segmentCnt <= 0) throw new IllegalArgumentException("ERROR: segmentCnt must not be 0 or below")
-  //      intList.size / segmentCnt
-  //    }
-  //    val segments = segmentSize map { s => intList.grouped(s).toList }
-  //
-  //    val futureMaxLists = segments map {
-  //      _ map { segment =>
-  //        Future {
-  //          segment.max
-  //        }
-  //      }
-  //    }
-  //    val maxLists = futureMaxLists flatMap { lists => futureSequence(lists) }
-  //
-  //    maxLists map { list => list.max }
-  //  }
+  private def futureSequence[T](in: List[Future[T]])(implicit ec: ExecutionContext): Future[List[T]] = {
+    val list = List.empty[T]
+
+    def unfoldFuture(list: List[T], in: List[Future[T]], idx: Int): Future[List[T]] = {
+      in(idx).flatMap(x => {
+        if (idx + 1 < in.size) {
+          unfoldFuture(list :+ x, in, idx + 1)
+        }
+        else {
+          Future {
+            list :+ x
+          }
+        }
+      })
+    }
+
+    unfoldFuture(list, in, 0)
+  }
+
+  def parallelMax2(intList: Seq[Int], segmentCnt: Int)(implicit ec: ExecutionContext): Future[Int] = {
+    val segmentSize = trySegmentCalc(intList.size, segmentCnt)
+    val segments = segmentSize map { s => intList.grouped(s).toList }
+
+    val futureMaxLists = segments map {
+      _ map { segment =>
+        Future {
+          segment.max
+        }
+      }
+    }
+    val maxLists = futureMaxLists flatMap { lists => futureSequence(lists) }
+
+    maxLists map { list => list.max }
+  }
 
   private def compute[T](promise: Promise[T], computation: => T, delay: FiniteDuration, retries: Int)(implicit ec: ExecutionContext, s: Scheduler): Unit = {
     Future {
@@ -62,7 +75,7 @@ object AdvancedFutureConcepts extends App {
         }
         f.foreach(x => promise success x)
         f.failed.foreach(_ => {
-          Console.println(s"INFO: Computation failed but has $retries retry(s) left to succeed")
+          println(s"INFO: Computation failed but has $retries retry(s) left to succeed")
           s.scheduleOnce(delay) {
             compute(promise, computation, delay, retries - 1)
           }
@@ -83,7 +96,9 @@ object AdvancedFutureConcepts extends App {
   println("==== AdvancedFutureConcepts ====")
   println("---- 1.3 a) ----")
 
-  def test13a[T](future: Future[T]): Unit = {
+  def test13ab[T](func: (Seq[T], Int) => Future[T], testSeq: Seq[T], segCtn: Int, funcName: String): Unit = {
+    println(s"running test13ab with $funcName on a Seq with ${testSeq.size} elements and a segmentCnt of $segCtn")
+    val future = func(testSeq, segCtn)
     future onComplete {
       case Success(v) => println(s"✔ Max is: $v")
       case Failure(ex) => println(s"❌ Max Failed with: $ex")
@@ -97,13 +112,17 @@ object AdvancedFutureConcepts extends App {
   println(rngNumbers.mkString("[", ", ", "]"))
   println()
 
-  test13a(parallelMax1(rngNumbers, 4))
-  test13a(parallelMax1(rngNumbers, -4))
-  test13a(parallelMax1(Seq.empty, 4))
+  test13ab(parallelMax1, rngNumbers, 4, "parallelMax1")
+  test13ab(parallelMax1, rngNumbers, -4, "parallelMax1")
+  test13ab(parallelMax1, Seq.empty, 4, "parallelMax1")
 
   println("\n---- 1.3 b) ----")
 
-  println("\n---- 1.3 c) ----")
+  test13ab(parallelMax2, rngNumbers, 4, "parallelMax2")
+  test13ab(parallelMax2, rngNumbers, 8, "parallelMax2")
+  test13ab(parallelMax2, rngNumbers, 16, "parallelMax2")
+
+  println("\n---- 1.4 ----")
 
   def failSometimes(): Int = {
     Thread.sleep(200) // simulate computation time
@@ -116,7 +135,7 @@ object AdvancedFutureConcepts extends App {
     Random.nextInt(42)
   }
 
-  def test13c[T](func: => T, retries: Int = 3)(implicit s: Scheduler): Unit = {
+  def test14[T](func: => T, retries: Int = 3)(implicit s: Scheduler): Unit = {
     val future = retryAsync(func, 250.millis, retries)
     future.foreach(x => println(s"Success with result $x"))
     future.failed.foreach(ex => println(s"Failed with exception $ex"))
@@ -126,10 +145,10 @@ object AdvancedFutureConcepts extends App {
 
   val system = akka.actor.ActorSystem()
 
-  test13c(neverFail())(system.scheduler)
-  test13c(failSometimes())(system.scheduler)
-  test13c(failSometimes())(system.scheduler)
-  test13c(failSometimes())(system.scheduler)
+  test14(neverFail())(system.scheduler)
+  test14(failSometimes())(system.scheduler)
+  test14(failSometimes())(system.scheduler)
+  test14(failSometimes())(system.scheduler)
 
   Await.ready(system.terminate(), Duration.Inf)
 }
