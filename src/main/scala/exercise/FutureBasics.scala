@@ -1,6 +1,6 @@
 package exercise
 
-import basics.Futures.{combine, compute, doWork, println}
+import basics.Futures.{compute, doWork, println}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
@@ -56,7 +56,13 @@ object FutureBasics extends App {
   Await.ready(fReturn, Duration.Inf)
   Thread.sleep(50)
 
-  println("---- 1.2 ----")
+  println("---- 1.1 c) ----")
+
+  def max(t: (Int, Int)): Int = {
+    if (t._1 >= t._2) t._1
+    else t._2
+  }
+
   val n = 8
   val n2 = n / 2
   val rngNumbers = Seq.fill(n)(Random.nextInt(16))
@@ -68,9 +74,9 @@ object FutureBasics extends App {
     Future(compute(2, n2, splitRngNums._2.max))
   )
   fMax onComplete {
-    case Success(uv) => println(s"✔ doInParallel finished Successful combine(u, v) = ${combine(uv._1, uv._2)}")
+    case Success(uv) => println(s"✔ doInParallel finished Successful max((u, v)) = ${max(uv)}")
     case Failure(ex) => println(s"❌ doInParallel finished with exception: $ex")
   }
   Await.ready(fMax, Duration.Inf)
-  Thread.sleep(2000)
+  Thread.sleep(50)
 }
